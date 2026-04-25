@@ -26,7 +26,7 @@ jobs:
 
             if [ ! -d "$APP_DIR/.git" ]; then
               echo "Creating $APP_DIR..."
-              sudo install -d -o deploy -g deploy "$APP_DIR"
+              sudo /usr/bin/install -d -o deploy -g deploy "$APP_DIR"
               git clone --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
             fi
 
