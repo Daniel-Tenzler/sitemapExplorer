@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import type { CrawlResult } from '../shared/types.js';
+import type { CrawlOptions, CrawlResult } from '../shared/types.js';
 import { CrawlSummary } from './components/CrawlSummary.js';
 import { CrawlLoadingState } from './components/CrawlLoadingState.js';
 import { SitemapForm } from './components/SitemapForm.js';
@@ -11,7 +11,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  async function handleCrawl(url: string) {
+  async function handleCrawl(url: string, options: CrawlOptions) {
     setIsLoading(true);
     setError(null);
     setResult(null);
@@ -20,7 +20,7 @@ export default function App() {
       const response = await fetch('/api/sitemap/crawl', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, options }),
       });
       const body = (await response.json()) as CrawlResult | { error?: string };
 

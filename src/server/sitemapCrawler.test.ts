@@ -75,6 +75,37 @@ describe('crawlSitemap', () => {
     expect(startedAt).toHaveLength(5);
     expect(startedAt[3] - startedAt[0]).toBeGreaterThanOrEqual(900);
   });
+
+  it('reuses cached sitemap XML across crawls', async () => {
+    const requestedUrls: string[] = [];
+    const cache = new Map<string, Promise<string>>();
+    const fetcher = async (url: string) => {
+      requestedUrls.push(url);
+      return fixtureFetcher(url);
+    };
+
+    await crawlSitemap('https://example.com/root.xml', {}, { fetcher, fetchCache: cache });
+    await crawlSitemap('https://example.com/root.xml', {}, { fetcher, fetchCache: cache });
+
+    expect(requestedUrls).toEqual(['https://example.com/root.xml', 'https://example.com/pages.xml']);
+  });
+
+  it('evicts old sitemap XML entries from the fetch cache', async () => {
+    const requestedUrls: string[] = [];
+    const cache = new Map<string, Promise<string>>();
+    const fetcher = async (url: string) => {
+      requestedUrls.push(url);
+      return '<urlset></urlset>';
+    };
+
+    for (let index = 0; index <= 500; index += 1) {
+      await crawlSitemap(`https://example.com/cache-${index}.xml`, { maxRequestsPerSecond: 1_000 }, { fetcher, fetchCache: cache });
+    }
+    await crawlSitemap('https://example.com/cache-0.xml', { maxRequestsPerSecond: 1_000 }, { fetcher, fetchCache: cache });
+
+    expect(cache.size).toBeLessThanOrEqual(500);
+    expect(requestedUrls.filter((url) => url === 'https://example.com/cache-0.xml')).toHaveLength(2);
+  });
 });
 
 async function fixtureFetcher(url: string): Promise<string> {

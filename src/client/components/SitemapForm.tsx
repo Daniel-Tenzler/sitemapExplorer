@@ -1,12 +1,34 @@
 import { FormEvent, useState } from 'react';
 
+import type { CrawlOptions } from '../../shared/types.js';
+import { CONFIGURABLE_CRAWL_OPTION_MAXIMUMS } from '../../shared/types.js';
+import { CRAWL_PRESETS, type AdvancedCrawlFields, type CrawlPresetId, buildCrawlOptions } from '../crawlOptions.js';
+
 type SitemapFormProps = {
   isLoading: boolean;
-  onSubmit: (url: string) => void;
+  onSubmit: (url: string, options: CrawlOptions) => void;
+};
+
+function createEmptyAdvancedFields(): AdvancedCrawlFields {
+  return {
+    maxDepth: '',
+    maxSitemaps: '',
+    maxUrls: '',
+    maxRequestsPerSecond: '',
+  };
+}
+
+const advancedFieldLabels: Record<keyof CrawlOptions, string> = {
+  maxDepth: 'Max depth',
+  maxSitemaps: 'Max sitemaps',
+  maxUrls: 'Max URLs',
+  maxRequestsPerSecond: 'Requests / sec',
 };
 
 export function SitemapForm({ isLoading, onSubmit }: SitemapFormProps) {
   const [url, setUrl] = useState('');
+  const [presetId, setPresetId] = useState<CrawlPresetId>('standard');
+  const [advancedFields, setAdvancedFields] = useState<AdvancedCrawlFields>(() => createEmptyAdvancedFields());
   const [validationError, setValidationError] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -24,7 +46,7 @@ export function SitemapForm({ isLoading, onSubmit }: SitemapFormProps) {
     }
 
     setValidationError(null);
-    onSubmit(trimmedUrl);
+    onSubmit(trimmedUrl, buildCrawlOptions(presetId, advancedFields));
   }
 
   return (
@@ -44,6 +66,48 @@ export function SitemapForm({ isLoading, onSubmit }: SitemapFormProps) {
           {isLoading ? 'Crawling' : 'Explore'}
         </button>
       </div>
+      <fieldset className="crawl-presets" disabled={isLoading}>
+        <legend>Crawl profile</legend>
+        <div className="preset-grid">
+          {Object.entries(CRAWL_PRESETS).map(([id, preset]) => (
+            <label className={`preset-option${presetId === id ? ' is-selected' : ''}`} key={id}>
+              <input
+                type="radio"
+                name="crawl-preset"
+                value={id}
+                checked={presetId === id}
+                onChange={() => {
+                  setPresetId(id as CrawlPresetId);
+                  setAdvancedFields(createEmptyAdvancedFields());
+                }}
+              />
+              <span>{preset.label}</span>
+              <small>{preset.description}</small>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <details className="advanced-crawl-options">
+        <summary>Advanced crawl limits</summary>
+        <div className="advanced-grid">
+          {(Object.keys(advancedFieldLabels) as Array<keyof CrawlOptions>).map((key) => (
+            <label key={key}>
+              <span>{advancedFieldLabels[key]}</span>
+              <input
+                type="number"
+                min="1"
+                max={CONFIGURABLE_CRAWL_OPTION_MAXIMUMS[key]}
+                step="1"
+                inputMode="numeric"
+                placeholder={CRAWL_PRESETS[presetId].options[key].toLocaleString()}
+                value={advancedFields[key]}
+                onChange={(event) => setAdvancedFields((current) => ({ ...current, [key]: event.target.value }))}
+                disabled={isLoading}
+              />
+            </label>
+          ))}
+        </div>
+      </details>
       {validationError ? <p className="field-error">{validationError}</p> : null}
     </form>
   );

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
 
+import { sanitizeCrawlOptions } from './crawlOptions.js';
 import { crawlSitemap } from './sitemapCrawler.js';
 
 const app = express();
@@ -23,7 +24,7 @@ app.post('/api/sitemap/crawl', async (request, response) => {
   }
 
   try {
-    const result = await crawlSitemap(body.url, isOptions(body.options) ? body.options : {});
+    const result = await crawlSitemap(body.url, sanitizeCrawlOptions(body.options));
     response.json(result);
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : 'Unable to crawl sitemap.' });
@@ -39,13 +40,3 @@ app.listen(port, '127.0.0.1', () => {
   console.log(`Sitemap Explorer API listening at http://127.0.0.1:${port}`);
 });
 
-function isOptions(value: unknown): value is { maxDepth?: number; maxSitemaps?: number; maxUrls?: number; maxRequestsPerSecond?: number } {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  return ['maxDepth', 'maxSitemaps', 'maxUrls', 'maxRequestsPerSecond'].every((key) => {
-    const maybeValue = (value as Record<string, unknown>)[key];
-    return maybeValue === undefined || (typeof maybeValue === 'number' && Number.isInteger(maybeValue) && maybeValue > 0);
-  });
-}

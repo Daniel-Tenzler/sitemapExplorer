@@ -39,6 +39,13 @@ export type CrawlOptions = {
   maxRequestsPerSecond?: number;
 };
 
+export const CONFIGURABLE_CRAWL_OPTION_MAXIMUMS: Required<CrawlOptions> = {
+  maxDepth: 50,
+  maxSitemaps: 5_000,
+  maxUrls: 500_000,
+  maxRequestsPerSecond: 20,
+};
+
 export type CrawlResult = {
   root: SitemapNode;
   summary: CrawlSummary;

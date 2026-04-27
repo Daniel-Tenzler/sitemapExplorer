@@ -7,7 +7,13 @@ import { normalizeInitialSitemapUrl, normalizeSitemapUrl } from './urlUtils.js';
 
 type CrawlDeps = {
   fetcher?: FetchSitemap;
+  fetchCache?: SitemapFetchCache;
 };
+
+type SitemapFetchCache = Map<string, Promise<string>>;
+
+const FETCH_CACHE_MAX_ENTRIES = 500;
+const defaultFetchCache: SitemapFetchCache = new Map();
 
 type CrawlState = {
   visitedSitemaps: Set<string>;
@@ -22,13 +28,16 @@ export async function crawlSitemap(url: string, options: CrawlOptions = {}, deps
   const startedAt = Date.now();
   const rootUrl = normalizeInitialSitemapUrl(url);
   const limits = { ...DEFAULT_CRAWL_LIMITS, ...options };
+  const baseFetcher = deps.fetcher ?? fetchSitemap;
+  const cache = deps.fetchCache ?? (deps.fetcher ? undefined : defaultFetchCache);
+  const rateLimitedFetcher = createRateLimitedFetcher(baseFetcher, limits.maxRequestsPerSecond);
   const state: CrawlState = {
     visitedSitemaps: new Set(),
     sitemapCount: 0,
     urlCount: 0,
     errors: [],
     limits,
-    fetcher: createRateLimitedFetcher(deps.fetcher ?? fetchSitemap, limits.maxRequestsPerSecond),
+    fetcher: cache ? createCachedFetcher(rateLimitedFetcher, cache) : rateLimitedFetcher,
   };
 
   const root = await crawlSitemapNode(rootUrl, 0, state);
@@ -189,6 +198,33 @@ function createRateLimitedFetcher(fetcher: FetchSitemap, maxRequestsPerSecond: n
 
     tokens = Math.min(maxTokens, tokens + windowsElapsed * maxTokens);
     lastRefill += windowsElapsed * refillMs;
+  }
+}
+
+function createCachedFetcher(fetcher: FetchSitemap, cache: SitemapFetchCache): FetchSitemap {
+  return async (url) => {
+    const cached = cache.get(url);
+    if (cached) {
+      return cached;
+    }
+
+    const request = fetcher(url).catch((error: unknown) => {
+      cache.delete(url);
+      throw error;
+    });
+    cache.set(url, request);
+    evictOldestCacheEntries(cache);
+    return request;
+  };
+}
+
+function evictOldestCacheEntries(cache: SitemapFetchCache): void {
+  while (cache.size > FETCH_CACHE_MAX_ENTRIES) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey === undefined) {
+      return;
+    }
+    cache.delete(oldestKey);
   }
 }
 
