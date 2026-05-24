@@ -72,7 +72,10 @@ function readLocEntry(entry: unknown, sourceUrl: string) {
     return { loc: '' };
   }
 
-  const loc = new URL(rawLoc, sourceUrl).toString();
+  const loc = normalizeHttpUrl(rawLoc, sourceUrl);
+  if (!loc) {
+    return { loc: '' };
+  }
 
   return {
     loc,
@@ -96,6 +99,19 @@ function asText(value: unknown): string | undefined {
   }
 
   return undefined;
+}
+
+function normalizeHttpUrl(value: string, sourceUrl: string): string | null {
+  try {
+    const url = new URL(value, sourceUrl);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

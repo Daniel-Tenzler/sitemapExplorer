@@ -9,11 +9,21 @@ export type CrawlLimits = {
 };
 
 export const DEFAULT_CRAWL_LIMITS: CrawlLimits = {
-  maxDepth: 15,
-  maxSitemaps: 500,
-  maxUrls: 50_000,
+  maxDepth: 8,
+  maxSitemaps: 100,
+  maxUrls: 10_000,
   requestTimeoutMs: 15_000,
-  maxResponseBytes: 50 * 1024 * 1024,
+  maxResponseBytes: 10 * 1024 * 1024,
+  concurrency: 5,
+  maxRequestsPerSecond: 3,
+};
+
+export const MAX_CRAWL_LIMITS: CrawlLimits = {
+  maxDepth: 8,
+  maxSitemaps: 100,
+  maxUrls: 10_000,
+  requestTimeoutMs: 15_000,
+  maxResponseBytes: 10 * 1024 * 1024,
   concurrency: 5,
   maxRequestsPerSecond: 3,
 };

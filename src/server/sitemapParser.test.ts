@@ -49,4 +49,26 @@ describe('parseSitemapXml', () => {
       'neither a sitemapindex nor a urlset',
     );
   });
+
+  it('filters non-http loc values', () => {
+    const parsed = parseSitemapXml(
+      `<urlset>
+        <url><loc>javascript:alert(1)</loc></url>
+        <url><loc>https://example.com/safe</loc></url>
+      </urlset>`,
+      'https://example.com/sitemap.xml',
+    );
+
+    expect(parsed).toEqual({
+      kind: 'urlset',
+      urls: [
+        {
+          loc: 'https://example.com/safe',
+          lastmod: undefined,
+          changefreq: undefined,
+          priority: undefined,
+        },
+      ],
+    });
+  });
 });
