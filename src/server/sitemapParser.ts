@@ -1,5 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 
+import type { CrawlLimits } from './limits.js';
+
 export type ParsedSitemap =
   | {
       kind: 'sitemapindex';
@@ -10,6 +12,8 @@ export type ParsedSitemap =
       urls: Array<{ loc: string; lastmod?: string; changefreq?: string; priority?: string }>;
     };
 
+type ParseLimits = Pick<CrawlLimits, 'maxSitemaps' | 'maxUrls'>;
+
 const parser = new XMLParser({
   ignoreAttributes: false,
   ignoreDeclaration: true,
@@ -18,8 +22,10 @@ const parser = new XMLParser({
   trimValues: true,
 });
 
-export function parseSitemapXml(xml: string, sourceUrl: string): ParsedSitemap {
+export function parseSitemapXml(xml: string, sourceUrl: string, limits?: ParseLimits): ParsedSitemap {
   let parsed: unknown;
+
+  assertWithinParseLimits(xml, limits);
 
   try {
     parsed = parser.parse(xml);
@@ -60,6 +66,33 @@ export function parseSitemapXml(xml: string, sourceUrl: string): ParsedSitemap {
   }
 
   throw new Error('XML is neither a sitemapindex nor a urlset.');
+}
+
+function assertWithinParseLimits(xml: string, limits?: ParseLimits): void {
+  if (!limits) {
+    return;
+  }
+
+  const urlEntries = countOpeningTags(xml, 'url');
+  if (urlEntries > limits.maxUrls) {
+    throw new Error('Sitemap contains more URL entries than the configured limit.');
+  }
+
+  const sitemapEntries = countOpeningTags(xml, 'sitemap');
+  if (sitemapEntries > limits.maxSitemaps) {
+    throw new Error('Sitemap contains more sitemap entries than the configured limit.');
+  }
+}
+
+function countOpeningTags(xml: string, tagName: string): number {
+  const pattern = new RegExp(`<\\s*(?:[\\w.-]+:)?${tagName}(?:\\s|>)`, 'gi');
+  let count = 0;
+
+  while (pattern.exec(xml)) {
+    count += 1;
+  }
+
+  return count;
 }
 
 function readLocEntry(entry: unknown, sourceUrl: string) {

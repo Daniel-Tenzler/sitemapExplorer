@@ -71,4 +71,30 @@ describe('parseSitemapXml', () => {
       ],
     });
   });
+
+  it('rejects URL sets over the configured URL limit before parsing', () => {
+    expect(() =>
+      parseSitemapXml(
+        `<urlset>
+          <url><loc>https://example.com/a</loc></url>
+          <url><loc>https://example.com/b</loc></url>
+        </urlset>`,
+        'https://example.com/sitemap.xml',
+        { maxUrls: 1, maxSitemaps: 10 },
+      ),
+    ).toThrow('more URL entries than the configured limit');
+  });
+
+  it('rejects sitemap indexes over the configured sitemap limit before parsing', () => {
+    expect(() =>
+      parseSitemapXml(
+        `<sitemapindex>
+          <sitemap><loc>https://example.com/a.xml</loc></sitemap>
+          <sitemap><loc>https://example.com/b.xml</loc></sitemap>
+        </sitemapindex>`,
+        'https://example.com/sitemap.xml',
+        { maxUrls: 10, maxSitemaps: 1 },
+      ),
+    ).toThrow('more sitemap entries than the configured limit');
+  });
 });

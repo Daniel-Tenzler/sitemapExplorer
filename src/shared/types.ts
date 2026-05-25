@@ -36,7 +36,9 @@ export type CrawlOptions = {
   maxDepth?: number;
   maxSitemaps?: number;
   maxUrls?: number;
+  maxCrawlDurationMs?: number;
   maxRequestsPerSecond?: number;
+  maxTotalResponseBytes?: number;
 };
 
 export type CrawlResult = {
