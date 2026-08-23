@@ -40,11 +40,9 @@ export default function App() {
     <main className="app-shell">
       <section className="hero-panel" aria-labelledby="page-title">
         <div className="hero-copy">
-          <p className="eyebrow">Recursive sitemap cartography</p>
-          <h1 id="page-title">Trace every branch of a sitemap forest.</h1>
+          <h1 id="page-title">Sitemap Explorer</h1>
           <p className="hero-text">
-            Enter a sitemap index or URL set and this local explorer will fetch nested sitemaps, keep the
-            parent-child structure intact, and flag broken branches without losing the rest of the crawl.
+            Enter a sitemap URL to crawl nested indexes and list every URL.
           </p>
         </div>
         <SitemapForm onSubmit={handleCrawl} isLoading={isLoading} />

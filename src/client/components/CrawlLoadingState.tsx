@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 
 const STATUS_MESSAGES = [
-  'Opening the root sitemap',
-  'Reading sitemap XML',
-  'Following nested sitemap indexes',
-  'Respecting the 3 requests/sec crawl limit',
-  'Deduplicating repeated sitemap references',
-  'Collecting URL leaves and metadata',
-  'Preserving partial results from slow branches',
+  'Fetching root sitemap',
+  'Parsing XML',
+  'Following nested indexes',
+  'Rate limited to 3 req/s',
+  'Skipping duplicate sitemaps',
+  'Collecting URLs',
+  'Keeping results from failed branches',
 ];
 
 export function CrawlLoadingState() {
@@ -32,8 +32,7 @@ export function CrawlLoadingState() {
         <span />
       </div>
       <div className="loading-copy">
-        <p className="eyebrow">Crawl in progress</p>
-        <h2>Crawling sitemap network</h2>
+        <h2>Crawling</h2>
         <p>{message}</p>
       </div>
       <div className="loading-meter" aria-hidden="true">

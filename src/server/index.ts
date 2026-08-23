@@ -30,6 +30,11 @@ let activeCrawls = 0;
 
 app.set('trust proxy', 'loopback');
 
+app.use((_request, response, next) => {
+  response.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
+  next();
+});
+
 app.use(
   cors({
     origin: allowedOrigins.length > 0 ? allowedOrigins : false,
