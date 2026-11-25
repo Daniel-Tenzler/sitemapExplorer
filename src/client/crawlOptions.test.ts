@@ -23,7 +23,7 @@ describe('buildCrawlOptions', () => {
   });
 
   it('ignores advanced field values above supported limits', () => {
-    expect(buildCrawlOptions('standard', { maxDepth: '51', maxSitemaps: '5001', maxUrls: '500001', maxRequestsPerSecond: '21' })).toEqual(
+    expect(buildCrawlOptions('standard', { maxDepth: '9', maxSitemaps: '101', maxUrls: '10001', maxRequestsPerSecond: '4' })).toEqual(
       CRAWL_PRESETS.standard.options,
     );
   });

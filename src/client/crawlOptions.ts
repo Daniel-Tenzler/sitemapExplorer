@@ -3,9 +3,10 @@ import { CONFIGURABLE_CRAWL_OPTION_MAXIMUMS } from '../shared/types.js';
 
 export type CrawlPresetId = 'small' | 'standard' | 'deep';
 
-export type AdvancedCrawlFields = Record<keyof CrawlOptions, string>;
+type ConfigurableCrawlOption = keyof typeof CONFIGURABLE_CRAWL_OPTION_MAXIMUMS;
+export type AdvancedCrawlFields = Record<ConfigurableCrawlOption, string>;
 
-export const CRAWL_PRESETS: Record<CrawlPresetId, { label: string; description: string; options: Required<CrawlOptions> }> = {
+export const CRAWL_PRESETS: Record<CrawlPresetId, { label: string; description: string; options: Record<ConfigurableCrawlOption, number> }> = {
   small: {
     label: 'Small',
     description: 'Quick look at compact sitemaps',
@@ -14,19 +15,19 @@ export const CRAWL_PRESETS: Record<CrawlPresetId, { label: string; description: 
   standard: {
     label: 'Standard',
     description: 'Balanced crawl for most sites',
-    options: { maxDepth: 10, maxSitemaps: 250, maxUrls: 25_000, maxRequestsPerSecond: 3 },
+    options: { maxDepth: 6, maxSitemaps: 75, maxUrls: 5_000, maxRequestsPerSecond: 3 },
   },
   deep: {
     label: 'Deep',
     description: 'Higher limits for large sitemap indexes',
-    options: { maxDepth: 15, maxSitemaps: 500, maxUrls: 50_000, maxRequestsPerSecond: 3 },
+    options: CONFIGURABLE_CRAWL_OPTION_MAXIMUMS,
   },
 };
 
 export function buildCrawlOptions(presetId: CrawlPresetId, advancedFields: Partial<AdvancedCrawlFields>): CrawlOptions {
-  const options: CrawlOptions = { ...CRAWL_PRESETS[presetId].options };
+  const options = { ...CRAWL_PRESETS[presetId].options };
 
-  for (const key of Object.keys(options) as Array<keyof CrawlOptions>) {
+  for (const key of Object.keys(options) as ConfigurableCrawlOption[]) {
     const parsedValue = parseSupportedInteger(advancedFields[key], CONFIGURABLE_CRAWL_OPTION_MAXIMUMS[key]);
     if (parsedValue !== null) {
       options[key] = parsedValue;

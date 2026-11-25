@@ -36,14 +36,16 @@ export type CrawlOptions = {
   maxDepth?: number;
   maxSitemaps?: number;
   maxUrls?: number;
+  maxCrawlDurationMs?: number;
   maxRequestsPerSecond?: number;
+  maxTotalResponseBytes?: number;
 };
 
-export const CONFIGURABLE_CRAWL_OPTION_MAXIMUMS: Required<CrawlOptions> = {
-  maxDepth: 50,
-  maxSitemaps: 5_000,
-  maxUrls: 500_000,
-  maxRequestsPerSecond: 20,
+export const CONFIGURABLE_CRAWL_OPTION_MAXIMUMS = {
+  maxDepth: 8,
+  maxSitemaps: 100,
+  maxUrls: 10_000,
+  maxRequestsPerSecond: 3,
 };
 
 export type CrawlResult = {

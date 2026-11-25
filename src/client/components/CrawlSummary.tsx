@@ -14,7 +14,7 @@ export function CrawlSummary({ summary }: CrawlSummaryProps) {
 
   return (
     <aside className="summary-card">
-      <p className="eyebrow">Crawl summary</p>
+      <h2>Summary</h2>
       <div className="summary-url">
         <span>Root</span>
         <a href={summary.rootUrl} target="_blank" rel="noreferrer">{summary.rootUrl}</a>

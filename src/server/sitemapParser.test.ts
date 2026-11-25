@@ -49,4 +49,52 @@ describe('parseSitemapXml', () => {
       'neither a sitemapindex nor a urlset',
     );
   });
+
+  it('filters non-http loc values', () => {
+    const parsed = parseSitemapXml(
+      `<urlset>
+        <url><loc>javascript:alert(1)</loc></url>
+        <url><loc>https://example.com/safe</loc></url>
+      </urlset>`,
+      'https://example.com/sitemap.xml',
+    );
+
+    expect(parsed).toEqual({
+      kind: 'urlset',
+      urls: [
+        {
+          loc: 'https://example.com/safe',
+          lastmod: undefined,
+          changefreq: undefined,
+          priority: undefined,
+        },
+      ],
+    });
+  });
+
+  it('rejects URL sets over the configured URL limit before parsing', () => {
+    expect(() =>
+      parseSitemapXml(
+        `<urlset>
+          <url><loc>https://example.com/a</loc></url>
+          <url><loc>https://example.com/b</loc></url>
+        </urlset>`,
+        'https://example.com/sitemap.xml',
+        { maxUrls: 1, maxSitemaps: 10 },
+      ),
+    ).toThrow('more URL entries than the configured limit');
+  });
+
+  it('rejects sitemap indexes over the configured sitemap limit before parsing', () => {
+    expect(() =>
+      parseSitemapXml(
+        `<sitemapindex>
+          <sitemap><loc>https://example.com/a.xml</loc></sitemap>
+          <sitemap><loc>https://example.com/b.xml</loc></sitemap>
+        </sitemapindex>`,
+        'https://example.com/sitemap.xml',
+        { maxUrls: 10, maxSitemaps: 1 },
+      ),
+    ).toThrow('more sitemap entries than the configured limit');
+  });
 });

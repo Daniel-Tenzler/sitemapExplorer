@@ -56,6 +56,30 @@ describe('crawlSitemap', () => {
     expect(result.errors[0]).toMatchObject({ code: 'LIMIT_URLS' });
   });
 
+  it('enforces a crawl-wide response byte budget', async () => {
+    const result = await crawlSitemap('https://example.com/pages.xml', { maxTotalResponseBytes: 32 }, { fetcher: fixtureFetcher });
+
+    expect(result.root.status).toBe('error');
+    expect(result.root.error).toBe('Crawl response budget exceeded.');
+  });
+
+  it('stops scheduling child sitemaps after sitemap limits are exhausted', async () => {
+    const requestedUrls: string[] = [];
+    const result = await crawlSitemap(
+      'https://example.com/wide-index.xml',
+      { maxSitemaps: 2 },
+      {
+        fetcher: async (url) => {
+          requestedUrls.push(url);
+          return fixtureFetcher(url);
+        },
+      },
+    );
+
+    expect(requestedUrls).toHaveLength(2);
+    expect(result.errors.filter((error) => error.code === 'LIMIT_SITEMAPS')).toHaveLength(3);
+  });
+
   it('rate limits sitemap fetch starts to three requests per second', async () => {
     const startedAt: number[] = [];
     const crawl = crawlSitemap(
@@ -78,7 +102,7 @@ describe('crawlSitemap', () => {
 
   it('reuses cached sitemap XML across crawls', async () => {
     const requestedUrls: string[] = [];
-    const cache = new Map<string, Promise<string>>();
+    const cache = new Map<string, string>();
     const fetcher = async (url: string) => {
       requestedUrls.push(url);
       return fixtureFetcher(url);
@@ -90,9 +114,22 @@ describe('crawlSitemap', () => {
     expect(requestedUrls).toEqual(['https://example.com/root.xml', 'https://example.com/pages.xml']);
   });
 
+  it('counts cached sitemap XML against the current crawl response budget', async () => {
+    const cache = new Map<string, string>();
+    const fetcher = async (url: string) => fixtureFetcher(url);
+    const deps = { fetcher, fetchCache: cache };
+    const url = 'https://example.com/pages.xml';
+
+    await crawlSitemap(url, {}, deps);
+    expect(cache.has(url)).toBe(true);
+
+    const result = await crawlSitemap(url, { maxTotalResponseBytes: 32 }, deps);
+    expect(result.root.error).toBe('Crawl response budget exceeded.');
+  });
+
   it('evicts old sitemap XML entries from the fetch cache', async () => {
     const requestedUrls: string[] = [];
-    const cache = new Map<string, Promise<string>>();
+    const cache = new Map<string, string>();
     const fetcher = async (url: string) => {
       requestedUrls.push(url);
       return '<urlset></urlset>';
@@ -105,6 +142,28 @@ describe('crawlSitemap', () => {
 
     expect(cache.size).toBeLessThanOrEqual(500);
     expect(requestedUrls.filter((url) => url === 'https://example.com/cache-0.xml')).toHaveLength(2);
+  });
+
+  it('stops crawls that exceed the crawl-wide deadline', async () => {
+    const cache = new Map<string, string>();
+    const result = await crawlSitemap(
+      'https://example.com/slow.xml',
+      { maxCrawlDurationMs: 25 },
+      {
+        fetchCache: cache,
+        fetcher: async (_url, signal) => {
+          await new Promise((resolve) => {
+            signal?.addEventListener('abort', resolve, { once: true });
+          });
+          throw new Error('Request should have been aborted.');
+        },
+      },
+    );
+
+    expect(result.root.status).toBe('error');
+    expect(result.root.error).toBe('Request should have been aborted.');
+    expect(result.summary.durationMs).toBeLessThan(500);
+    expect(cache.size).toBe(0);
   });
 });
 

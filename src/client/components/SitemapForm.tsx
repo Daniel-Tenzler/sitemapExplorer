@@ -18,7 +18,7 @@ function createEmptyAdvancedFields(): AdvancedCrawlFields {
   };
 }
 
-const advancedFieldLabels: Record<keyof CrawlOptions, string> = {
+const advancedFieldLabels: AdvancedCrawlFields = {
   maxDepth: 'Max depth',
   maxSitemaps: 'Max sitemaps',
   maxUrls: 'Max URLs',
@@ -90,7 +90,7 @@ export function SitemapForm({ isLoading, onSubmit }: SitemapFormProps) {
       <details className="advanced-crawl-options">
         <summary>Advanced crawl limits</summary>
         <div className="advanced-grid">
-          {(Object.keys(advancedFieldLabels) as Array<keyof CrawlOptions>).map((key) => (
+          {(Object.keys(advancedFieldLabels) as Array<keyof AdvancedCrawlFields>).map((key) => (
             <label key={key}>
               <span>{advancedFieldLabels[key]}</span>
               <input

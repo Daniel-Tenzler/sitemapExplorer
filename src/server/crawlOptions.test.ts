@@ -19,7 +19,24 @@ describe('sanitizeCrawlOptions', () => {
     });
   });
 
-  it('drops values above supported limits', () => {
-    expect(sanitizeCrawlOptions({ maxDepth: 51, maxSitemaps: 5_001, maxUrls: 500_001, maxRequestsPerSecond: 21 })).toEqual({});
+  it('clamps values to the server limits', () => {
+    expect(
+      sanitizeCrawlOptions({
+        maxDepth: 51,
+        maxSitemaps: 5_001,
+        maxUrls: 500_001,
+        maxRequestsPerSecond: 21,
+        maxCrawlDurationMs: 120_000,
+        maxTotalResponseBytes: 50 * 1024 * 1024,
+        concurrency: 10,
+      }),
+    ).toEqual({
+      maxDepth: 8,
+      maxSitemaps: 100,
+      maxUrls: 10_000,
+      maxRequestsPerSecond: 3,
+      maxCrawlDurationMs: 60_000,
+      maxTotalResponseBytes: 25 * 1024 * 1024,
+    });
   });
 });

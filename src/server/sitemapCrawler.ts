@@ -10,18 +10,21 @@ type CrawlDeps = {
   fetchCache?: SitemapFetchCache;
 };
 
-type SitemapFetchCache = Map<string, Promise<string>>;
+type SitemapFetchCache = Map<string, string>;
 
 const FETCH_CACHE_MAX_ENTRIES = 500;
+const FETCH_CACHE_MAX_BYTES = DEFAULT_CRAWL_LIMITS.maxTotalResponseBytes;
 const defaultFetchCache: SitemapFetchCache = new Map();
 
 type CrawlState = {
   visitedSitemaps: Set<string>;
   sitemapCount: number;
   urlCount: number;
+  responseBytes: number;
   errors: CrawlError[];
   limits: typeof DEFAULT_CRAWL_LIMITS;
   fetcher: FetchSitemap;
+  signal: AbortSignal;
 };
 
 export async function crawlSitemap(url: string, options: CrawlOptions = {}, deps: CrawlDeps = {}): Promise<CrawlResult> {
@@ -31,28 +34,36 @@ export async function crawlSitemap(url: string, options: CrawlOptions = {}, deps
   const baseFetcher = deps.fetcher ?? fetchSitemap;
   const cache = deps.fetchCache ?? (deps.fetcher ? undefined : defaultFetchCache);
   const rateLimitedFetcher = createRateLimitedFetcher(baseFetcher, limits.maxRequestsPerSecond);
+  const controller = new AbortController();
+  const crawlTimeout = setTimeout(() => controller.abort(), limits.maxCrawlDurationMs);
   const state: CrawlState = {
     visitedSitemaps: new Set(),
     sitemapCount: 0,
     urlCount: 0,
+    responseBytes: 0,
     errors: [],
     limits,
     fetcher: cache ? createCachedFetcher(rateLimitedFetcher, cache) : rateLimitedFetcher,
+    signal: controller.signal,
   };
 
-  const root = await crawlSitemapNode(rootUrl, 0, state);
+  try {
+    const root = await crawlSitemapNode(rootUrl, 0, state);
 
-  return {
-    root,
-    summary: {
-      rootUrl,
-      sitemapsDiscovered: state.sitemapCount,
-      urlsDiscovered: state.urlCount,
-      errors: state.errors.length,
-      durationMs: Date.now() - startedAt,
-    },
-    errors: state.errors,
-  };
+    return {
+      root,
+      summary: {
+        rootUrl,
+        sitemapsDiscovered: state.sitemapCount,
+        urlsDiscovered: state.urlCount,
+        errors: state.errors.length,
+        durationMs: Date.now() - startedAt,
+      },
+      errors: state.errors,
+    };
+  } finally {
+    clearTimeout(crawlTimeout);
+  }
 }
 
 async function crawlSitemapNode(url: string, depth: number, state: CrawlState): Promise<SitemapNode> {
@@ -79,8 +90,11 @@ async function crawlSitemapNode(url: string, depth: number, state: CrawlState): 
   state.sitemapCount += 1;
 
   try {
-    const xml = await state.fetcher(url);
-    const parsed = parseSitemapXml(xml, url);
+    assertCrawlActive(state.signal);
+    const xml = await state.fetcher(url, state.signal);
+    assertCrawlActive(state.signal);
+    trackResponseBytes(xml, state);
+    const parsed = parseSitemapXml(xml, url, DEFAULT_CRAWL_LIMITS);
 
     if (parsed.kind === 'urlset') {
       node.children = parsed.urls.map((entry) => toUrlNode(entry, state)).filter((child): child is UrlNode => child !== null);
@@ -90,6 +104,14 @@ async function crawlSitemapNode(url: string, depth: number, state: CrawlState): 
 
     const childUrls = parsed.sitemaps.map((entry) => entry.loc);
     node.children = await mapWithConcurrency(childUrls, state.limits.concurrency, async (childUrl) => {
+      if (state.sitemapCount >= state.limits.maxSitemaps) {
+        return markSkippedUrl(childUrl, state, 'Maximum sitemap count exceeded.', 'LIMIT_SITEMAPS');
+      }
+
+      if (state.urlCount >= state.limits.maxUrls) {
+        return markSkippedUrl(childUrl, state, 'Maximum URL count exceeded.', 'LIMIT_URLS');
+      }
+
       let normalizedChildUrl: string;
 
       try {
@@ -134,6 +156,17 @@ function markSkipped(node: SitemapNode, state: CrawlState, message: string, code
   return node;
 }
 
+function markSkippedUrl(url: string, state: CrawlState, message: string, code: string): SitemapNode {
+  state.errors.push({ url, message, code });
+  return {
+    type: 'sitemap',
+    url,
+    status: 'skipped',
+    children: [],
+    error: message,
+  };
+}
+
 function errorNode(url: string, state: CrawlState, message: string, code: string): SitemapNode {
   state.errors.push({ url, message, code });
   return {
@@ -169,20 +202,29 @@ function createRateLimitedFetcher(fetcher: FetchSitemap, maxRequestsPerSecond: n
   let lastRefill = Date.now();
   let queue = Promise.resolve();
 
-  return async (url) => {
+  return async (url, signal) => {
     queue = queue.then(async () => {
-      await waitForToken();
+      if (signal) {
+        assertCrawlActive(signal);
+      }
+      await waitForToken(signal);
     });
 
     await queue;
-    return fetcher(url);
+    if (signal) {
+      assertCrawlActive(signal);
+    }
+    return fetcher(url, signal);
   };
 
-  async function waitForToken(): Promise<void> {
+  async function waitForToken(signal?: AbortSignal): Promise<void> {
     refillTokens();
 
     while (tokens <= 0) {
       await delay(Math.max(0, refillMs - (Date.now() - lastRefill)));
+      if (signal) {
+        assertCrawlActive(signal);
+      }
       refillTokens();
     }
 
@@ -202,29 +244,49 @@ function createRateLimitedFetcher(fetcher: FetchSitemap, maxRequestsPerSecond: n
 }
 
 function createCachedFetcher(fetcher: FetchSitemap, cache: SitemapFetchCache): FetchSitemap {
-  return async (url) => {
+  return async (url, signal) => {
     const cached = cache.get(url);
-    if (cached) {
+    if (cached !== undefined) {
       return cached;
     }
 
-    const request = fetcher(url).catch((error: unknown) => {
-      cache.delete(url);
-      throw error;
-    });
-    cache.set(url, request);
-    evictOldestCacheEntries(cache);
-    return request;
+    // Cache completed responses only, so one crawl's abort cannot cancel another crawl's request.
+    const xml = await fetcher(url, signal);
+    if (!signal?.aborted && xml.length * 2 <= FETCH_CACHE_MAX_BYTES) {
+      cache.set(url, xml);
+      evictOldestCacheEntries(cache);
+    }
+    return xml;
   };
 }
 
 function evictOldestCacheEntries(cache: SitemapFetchCache): void {
-  while (cache.size > FETCH_CACHE_MAX_ENTRIES) {
-    const oldestKey = cache.keys().next().value;
-    if (oldestKey === undefined) {
-      return;
+  // Budget two bytes per UTF-16 code unit to bound retained response text.
+  let bytes = 0;
+  for (const xml of cache.values()) {
+    bytes += xml.length * 2;
+  }
+
+  for (const [url, xml] of cache) {
+    if (cache.size <= FETCH_CACHE_MAX_ENTRIES && bytes <= FETCH_CACHE_MAX_BYTES) {
+      break;
     }
-    cache.delete(oldestKey);
+    bytes -= xml.length * 2;
+    cache.delete(url);
+  }
+}
+
+function trackResponseBytes(xml: string, state: CrawlState): void {
+  state.responseBytes += new TextEncoder().encode(xml).byteLength;
+
+  if (state.responseBytes > state.limits.maxTotalResponseBytes) {
+    throw new Error('Crawl response budget exceeded.');
+  }
+}
+
+function assertCrawlActive(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw new Error('Crawl timeout.');
   }
 }
 
