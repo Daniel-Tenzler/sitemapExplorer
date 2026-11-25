@@ -37,7 +37,6 @@ jobs:
             git reset --hard "origin/$BRANCH"
 
             echo "Running deploy script..."
-            chmod +x deploy/deploy.sh
             bash deploy/deploy.sh
 
             echo "Deployment complete!"
